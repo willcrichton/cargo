@@ -36,7 +36,7 @@ pub use self::build_config::{BuildConfig, CompileMode, MessageFormat};
 pub use self::build_context::{
     BuildContext, FileFlavor, FileType, RustDocFingerprint, RustcTargetData, TargetInfo,
 };
-use self::build_plan::BuildPlan;
+pub use self::build_plan::BuildPlan;
 pub use self::compilation::{Compilation, Doctest, UnitOutput};
 pub use self::compile_kind::{CompileKind, CompileTarget};
 pub use self::context::{Context, Metadata};
@@ -44,7 +44,7 @@ pub use self::crate_type::CrateType;
 pub use self::custom_build::{BuildOutput, BuildScriptOutputs, BuildScripts, build_map};
 pub use self::job::Freshness;
 use self::job::{Job, Work};
-use self::job_queue::{JobQueue, JobState};
+pub use self::job_queue::{JobQueue, JobState};
 pub(crate) use self::layout::Layout;
 pub use self::lto::Lto;
 use self::output_depinfo::output_depinfo;
@@ -137,7 +137,7 @@ impl Executor for DefaultExecutor {
     }
 }
 
-fn compile<'cfg>(
+pub fn compile<'cfg>(
     cx: &mut Context<'_, 'cfg>,
     jobs: &mut JobQueue<'cfg>,
     plan: &mut BuildPlan,
