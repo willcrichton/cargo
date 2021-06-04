@@ -269,7 +269,7 @@ fn cargo_compile_with_invalid_version() {
 [ERROR] failed to parse manifest at `[..]`
 
 Caused by:
-  Expected dot for key `package.version`
+  unexpected end of input while parsing minor version number for key `package.version`
 ",
         )
         .run();
@@ -544,7 +544,7 @@ Caused by:
   failed to parse the version requirement `y` for dependency `crossbeam`
 
 Caused by:
-  the given version requirement is invalid
+  unexpected character 'y' while parsing major version number
 ",
         )
         .run();
@@ -1334,12 +1334,18 @@ fn crate_env_vars() {
                     let s = format!("{}.{}.{}-{}", VERSION_MAJOR,
                                     VERSION_MINOR, VERSION_PATCH, VERSION_PRE);
                     assert_eq!(s, VERSION);
+
+                    // Verify CARGO_TARGET_TMPDIR isn't set for bins
+                    assert!(option_env!("CARGO_TARGET_TMPDIR").is_none());
                 }
             "#,
         )
         .file(
             "src/lib.rs",
             r#"
+                use std::env;
+                use std::path::PathBuf;
+
                 pub fn version() -> String {
                     format!("{}-{}-{} @ {} in {}",
                             env!("CARGO_PKG_VERSION_MAJOR"),
@@ -1348,9 +1354,60 @@ fn crate_env_vars() {
                             env!("CARGO_PKG_VERSION_PRE"),
                             env!("CARGO_MANIFEST_DIR"))
                 }
+
+                pub fn check_no_int_test_env() {
+                    env::var("CARGO_TARGET_DIR").unwrap_err();
+                }
+
+                pub fn check_tmpdir(tmp: Option<&'static str>) {
+                    let tmpdir: PathBuf = tmp.unwrap().into();
+
+                    let exe: PathBuf = env::current_exe().unwrap().into();
+                    let mut expected: PathBuf = exe.parent().unwrap().parent().unwrap().into();
+                    expected.push("tmp");
+                    assert_eq!(tmpdir, expected);
+
+                    // Check that CARGO_TARGET_TMPDIR isn't set for lib code
+                    assert!(option_env!("CARGO_TARGET_TMPDIR").is_none());
+                    env::var("CARGO_TARGET_TMPDIR").unwrap_err();
+                }
+
+                #[test]
+                fn env() {
+                    // Check that CARGO_TARGET_TMPDIR isn't set for unit tests
+                    assert!(option_env!("CARGO_TARGET_TMPDIR").is_none());
+                    env::var("CARGO_TARGET_TMPDIR").unwrap_err();
+                }
             "#,
         )
-        .build();
+        .file(
+            "tests/env.rs",
+            r#"
+                #[test]
+                fn env() {
+                    foo::check_tmpdir(option_env!("CARGO_TARGET_TMPDIR"));
+                }
+            "#,
+        );
+
+    let p = if is_nightly() {
+        p.file(
+            "benches/env.rs",
+            r#"
+                #![feature(test)]
+                extern crate test;
+                use test::Bencher;
+
+                #[bench]
+                fn env(_: &mut Bencher) {
+                    foo::check_tmpdir(option_env!("CARGO_TARGET_TMPDIR"));
+                }
+            "#,
+        )
+        .build()
+    } else {
+        p.build()
+    };
 
     println!("build");
     p.cargo("build -v").run();
@@ -1362,6 +1419,11 @@ fn crate_env_vars() {
 
     println!("test");
     p.cargo("test -v").run();
+
+    if is_nightly() {
+        println!("bench");
+        p.cargo("bench -v").run();
+    }
 }
 
 #[cargo_test]
